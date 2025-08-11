@@ -1,4 +1,5 @@
 mod decoding;
+mod error;
 mod handlers;
 mod model;
 

@@ -14,6 +14,8 @@ fn image_to_vec(img: &DynamicImage) -> Vec<f32> {
 }
 
 /// Takes an image in b64 and decodes it to a flat vector
+///
+/// It returns an error if the image is not 28x28.
 pub fn decode_and_process_image(image_b64: &str) -> Result<Vec<f32>, String> {
     let bytes = BASE64_STANDARD
         .decode(image_b64)
@@ -24,6 +26,14 @@ pub fn decode_and_process_image(image_b64: &str) -> Result<Vec<f32>, String> {
         .map_err(|_| "Invalid image format".to_string())?
         .decode()
         .map_err(|_| "Failed to decode image".to_string())?;
+
+    if img.width() != 28 || img.height() != 28 {
+        return Err(format!(
+            "Image must be 28x28 pixels, got {}x{}",
+            img.width(),
+            img.height()
+        ));
+    }
 
     Ok(image_to_vec(&img))
 }

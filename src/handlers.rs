@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::decoding::decode_and_process_image;
+use crate::error::ApiError;
 use crate::model::worker::PredictionRequest;
 
 #[derive(Deserialize)]
@@ -23,10 +24,10 @@ pub async fn health() -> &'static str {
 pub async fn predict(
     State(sender): State<mpsc::UnboundedSender<PredictionRequest>>,
     Json(payload): Json<ImagePayload>,
-) -> Result<(StatusCode, String), (StatusCode, String)> {
+) -> Result<(StatusCode, String), ApiError> {
     let image_vec = match decode_and_process_image(&payload.image_b64) {
         Ok(vec) => vec,
-        Err(e) => return Err((StatusCode::BAD_REQUEST, e)),
+        Err(e) => return Err(ApiError::BadRequest(format!("Image decoding error: {}", e))),
     };
 
     let (response_sender, response_receiver) = oneshot::channel();
@@ -40,9 +41,6 @@ pub async fn predict(
 
     match response_receiver.await {
         Ok(prediction) => Ok((StatusCode::OK, prediction.to_string())),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Prediction failed".to_string(),
-        )),
+        Err(e) => Err(ApiError::InternalServer(e.to_string())),
     }
 }
