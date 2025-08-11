@@ -9,12 +9,20 @@ use axum::{
 };
 use handlers::{health, predict};
 use tokio::sync::mpsc;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use model::worker::ModelWorker;
 
 /// The app entrypoint
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
+    tracing::info!("Starting burn-live-inference server");
+
     let (sender, receiver) = mpsc::unbounded_channel();
 
     let worker_handle = tokio::spawn(async move {
@@ -28,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(sender);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await?;
-    println!("Server running on http://0.0.0.0:8000");
+    tracing::info!("Server running on http://0.0.0.0:8000");
 
     tokio::select! {
         _ = axum::serve(listener, app) => {},

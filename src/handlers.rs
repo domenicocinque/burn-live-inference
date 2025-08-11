@@ -21,13 +21,18 @@ pub async fn health() -> &'static str {
 }
 
 /// Predict the label for an input image
+#[tracing::instrument(skip(sender, payload))]
 pub async fn predict(
     State(sender): State<mpsc::UnboundedSender<PredictionRequest>>,
     Json(payload): Json<ImagePayload>,
 ) -> Result<(StatusCode, String), ApiError> {
+    tracing::debug!("Processing prediction request");
+
     let image_vec = match decode_and_process_image(&payload.image_b64) {
         Ok(vec) => vec,
-        Err(e) => return Err(ApiError::BadRequest(format!("Image decoding error: {}", e))),
+        Err(e) => {
+            return Err(ApiError::BadRequest(format!("Image decoding error: {}", e)));
+        }
     };
 
     let (response_sender, response_receiver) = oneshot::channel();
@@ -41,6 +46,9 @@ pub async fn predict(
 
     match response_receiver.await {
         Ok(prediction) => Ok((StatusCode::OK, prediction.to_string())),
-        Err(e) => Err(ApiError::InternalServer(e.to_string())),
+        Err(e) => {
+            tracing::error!(error = %e, "Worker communication failed");
+            Err(ApiError::InternalServer(e.to_string()))
+        }
     }
 }

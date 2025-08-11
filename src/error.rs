@@ -11,7 +11,7 @@ impl IntoResponse for ApiError {
         let (status, msg) = match self {
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::InternalServer(msg) => {
-                eprintln!("Internal error: {}", msg);
+                tracing::error!("Internal server error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
             }
         };
