@@ -3,11 +3,11 @@ use axum::{
     http::StatusCode,
 };
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 use crate::decoding::decode_and_process_image;
-use crate::model::ClassificationModel;
+use crate::model::worker::PredictionRequest;
 
 #[derive(Deserialize)]
 pub struct ImagePayload {
@@ -21,7 +21,7 @@ pub async fn health() -> &'static str {
 
 /// Predict the label for an input image
 pub async fn predict(
-    State(model): State<Arc<Mutex<ClassificationModel>>>,
+    State(sender): State<mpsc::UnboundedSender<PredictionRequest>>,
     Json(payload): Json<ImagePayload>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     let image_vec = match decode_and_process_image(&payload.image_b64) {
@@ -29,7 +29,20 @@ pub async fn predict(
         Err(e) => return Err((StatusCode::BAD_REQUEST, e)),
     };
 
-    let prediction = model.lock().await.predict(image_vec);
+    let (response_sender, response_receiver) = oneshot::channel();
 
-    Ok((StatusCode::OK, prediction.to_string()))
+    let prediction_request = PredictionRequest {
+        image: image_vec,
+        response_tx: response_sender,
+    };
+
+    let _ = sender.send(prediction_request);
+
+    match response_receiver.await {
+        Ok(prediction) => Ok((StatusCode::OK, prediction.to_string())),
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Prediction failed".to_string(),
+        )),
+    }
 }

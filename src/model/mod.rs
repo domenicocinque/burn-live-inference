@@ -3,4 +3,4 @@ mod mnist {
 }
 
 pub mod model;
-pub use model::ClassificationModel;
+pub mod worker;
